@@ -8,8 +8,8 @@ app.use(express.json());
 
 const db = mysql.createConnection({
     host: 'localhost',
-    user: 'your_user',
-    password: 'your_password',
+    user: 'todo_user',
+    password: process.env.MYSQL_PASSWORD,
     database: 'todo_app'
 });
 
