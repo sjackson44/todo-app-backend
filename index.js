@@ -1,136 +1,58 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+const express = require('express');
+const mysql = require('mysql2');
+const cors = require('cors');
 
-interface Todo {
-    id: number;
-    title: string;
-    completed: boolean;
-}
+const app = express();
+app.use(cors());
+app.use(express.json());
 
-const TodoList: React.FC = () => {
-    const [todos, setTodos] = useState<Todo[]>([]);
-    const [newTodo, setNewTodo] = useState<string>('');
-    const [editingTodoId, setEditingTodoId] = useState<number | null>(null);
-    const [editedTitle, setEditedTitle] = useState<string>('');
+const db = mysql.createConnection({
+    host: process.env.MYSQL_HOST,
+    user: process.env.MYSQL_USER,
+    password: process.env.MYSQL_PASSWORD,
+    database: process.env.MYSQL_DATABASE
+});
 
-    useEffect(() => {
-        fetchTodos();
-    }, []);
+db.connect(err => {
+    if (err) throw err;
+    console.log('MySQL connected...');
+});
 
-    const fetchTodos = async () => {
-        try {
-            const response = await axios.get('http://35.173.7.161/todos');
-            setTodos(response.data);
-        } catch (error) {
-            console.error('Error fetching todos:', error);
-        }
-    };
+app.get('/todos', (req, res) => {
+    db.query('SELECT * FROM todos', (err, results) => {
+        if (err) throw err;
+        res.json(results);
+    });
+});
 
-    const addTodo = async () => {
-        if (newTodo.trim() === '') return;
-        try {
-            const response = await axios.post('http://35.173.7.161/todos', { title: newTodo, completed: false });
-            setTodos(prevTodos => [...prevTodos, response.data]);
-            setNewTodo('');
-        } catch (error) {
-            console.error('Error adding todo:', error);
-        }
-    };
+app.post('/todos', (req, res) => {
+    const { title, completed } = req.body;
+    db.query('INSERT INTO todos (title, completed) VALUES (?, ?)', [title, completed], (err, result) => {
+        if (err) throw err;
+        // Fetch the newly added todo item
+        db.query('SELECT * FROM todos WHERE id = ?', [result.insertId], (err, rows) => {
+            if (err) throw err;
+            res.json(rows[0]); // Return the complete todo object
+        });
+    });
+});
 
-    const updateTodo = async (todo: Todo) => {
-        try {
-            const response = await axios.put(`http://35.173.7.161/todos/${todo.id}`, todo);
-            setTodos(prevTodos => prevTodos.map(t => (t.id === todo.id ? response.data : t)));
-            setEditingTodoId(null);
-            setEditedTitle('');
-        } catch (error) {
-            console.error('Error updating todo:', error);
-        }
-    };
+app.put('/todos/:id', (req, res) => {
+    const { id } = req.params;
+    const { title, completed } = req.body;
+    db.query('UPDATE todos SET title = ?, completed = ? WHERE id = ?', [title, completed, id], (err, result) => {
+        if (err) throw err;
+        res.json(result);
+    });
+});
 
-    const deleteTodo = async (id: number) => {
-        try {
-            await axios.delete(`http://35.173.7.161/todos/${id}`);
-            setTodos(prevTodos => prevTodos.filter(t => t.id !== id));
-        } catch (error) {
-            console.error('Error deleting todo:', error);
-        }
-    };
+app.delete('/todos/:id', (req, res) => {
+    const { id } = req.params;
+    db.query('DELETE FROM todos WHERE id = ?', [id], (err, result) => {
+        if (err) throw err;
+        res.json(result);
+    });
+});
 
-    const toggleComplete = (todo: Todo) => {
-        updateTodo({ ...todo, completed: !todo.completed });
-    };
-
-    const handleEdit = (todo: Todo) => {
-        setEditingTodoId(todo.id);
-        setEditedTitle(todo.title);
-    };
-
-    const handleSave = (id: number) => {
-        const updatedTodo = todos.find(todo => todo.id === id);
-        if (updatedTodo) {
-            updateTodo({ ...updatedTodo, title: editedTitle });
-        }
-    };
-
-    return (
-        <div>
-            <div className="flex mb-4">
-                <input
-                    type="text"
-                    value={newTodo}
-                    onChange={(e) => setNewTodo(e.target.value)}
-                    className="todo-input"
-                    placeholder="New Todo"
-                    autoComplete="off"
-                />
-                <button onClick={addTodo} className="todo-button">Add</button>
-            </div>
-            <ul className="list-none p-0">
-                {todos.map(todo => (
-                    <li key={todo.id} className="todo-item">
-                        {editingTodoId === todo.id ? (
-                            <div className="flex items-center">
-                                <input
-                                    type="text"
-                                    value={editedTitle}
-                                    onChange={(e) => setEditedTitle(e.target.value)}
-                                    className="todo-input flex-grow"
-                                />
-                                <button
-                                    onClick={() => handleSave(todo.id)}
-                                    className="todo-item-button todo-item-save ml-2"
-                                >
-                                    Save
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="flex items-center">
-                                <span
-                                    onClick={() => toggleComplete(todo)}
-                                    className={`todo-item-text ${todo.completed ? 'line-through' : ''}`}
-                                >
-                                    {todo.title}
-                                </span>
-                                <button
-                                    onClick={() => handleEdit(todo)}
-                                    className="todo-item-button todo-item-edit ml-2"
-                                >
-                                    Edit
-                                </button>
-                                <button
-                                    onClick={() => deleteTodo(todo.id)}
-                                    className="todo-item-button todo-item-delete ml-2"
-                                >
-                                    Delete
-                                </button>
-                            </div>
-                        )}
-                    </li>
-                ))}
-            </ul>
-        </div>
-    );
-};
-
-export default TodoList;
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
