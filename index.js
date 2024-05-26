@@ -29,7 +29,11 @@ app.post('/todos', (req, res) => {
     const { title, completed } = req.body;
     db.query('INSERT INTO todos (title, completed) VALUES (?, ?)', [title, completed], (err, result) => {
         if (err) throw err;
-        res.json({ id: result.insertId });
+        // Fetch the newly added todo item
+        db.query('SELECT * FROM todos WHERE id = ?', [result.insertId], (err, rows) => {
+            if (err) throw err;
+            res.json(rows[0]); // Return the complete todo object
+        });
     });
 });
 
